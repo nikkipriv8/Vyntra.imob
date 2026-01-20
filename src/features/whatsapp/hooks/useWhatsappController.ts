@@ -35,10 +35,10 @@ export function useWhatsappController() {
       window.clearTimeout(conversationsRefreshTimer);
     }
 
-    // Debounce to avoid heavy N+1 refreshes on every realtime event.
+    // Keep it near-instant, but still collapse bursts of events.
     conversationsRefreshTimer = window.setTimeout(() => {
       loadConversations({ silent: true });
-    }, 600);
+    }, 50);
   };
 
   const loadConversations = async (opts?: { silent?: boolean }) => {
@@ -101,6 +101,23 @@ export function useWhatsappController() {
     };
 
     setMessages((prev) => [...prev, optimisticMessage]);
+
+    // Update conversation preview instantly
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => c.id === selectedConversation.id);
+      if (idx === -1) return prev;
+
+      const updated = {
+        ...prev[idx],
+        last_message_at: optimisticMessage.created_at,
+        last_message: optimisticMessage.content ?? null,
+      } as Conversation;
+
+      const next = [...prev];
+      next.splice(idx, 1);
+      next.unshift(updated);
+      return next;
+    });
 
     try {
       const { data: session } = await supabase.auth.getSession();
