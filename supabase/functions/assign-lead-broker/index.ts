@@ -29,8 +29,9 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader?.startsWith("Bearer ")) {
+      // Best-effort endpoint: should never crash the UI.
       console.warn("[assign-lead-broker] missing bearer token");
-      return json(401, { error: "Unauthorized" });
+      return json(200, { ok: false, skipped: true, reason: "unauthorized" });
     }
 
     // Validate the caller token explicitly (verify_jwt=false)
@@ -49,7 +50,7 @@ Deno.serve(async (req) => {
     const callerUserId = user?.id;
     if (userErr || !callerUserId) {
       console.warn("[assign-lead-broker] invalid token", userErr);
-      return json(401, { error: "Unauthorized" });
+      return json(200, { ok: false, skipped: true, reason: "unauthorized" });
     }
 
     // Only staff can claim leads
