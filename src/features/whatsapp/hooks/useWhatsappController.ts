@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Conversation, Lead, Message } from "@/features/whatsapp/types";
+import { playNotificationBeep } from "@/lib/notificationSound";
 import {
   fetchConversations,
   fetchLead,
@@ -89,6 +90,16 @@ export function useWhatsappController() {
     } finally {
       setIsLoadingMessages(false);
     }
+  };
+
+  const mergeMessages = (current: Message[], incoming: Message[]) => {
+    if (incoming.length === 0) return current;
+    const map = new Map<string, Message>();
+    for (const m of current) map.set(m.id, m);
+    for (const m of incoming) map.set(m.id, m);
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
   };
 
   const loadLeadInfo = async (leadId: string | null) => {
@@ -343,6 +354,53 @@ export function useWhatsappController() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversationId]);
 
+  // Fallback sync (WhatsApp Web-like): keep data fresh even if realtime drops
+  useEffect(() => {
+    if (!selectedConversationId) return;
+
+    const interval = window.setInterval(async () => {
+      // Avoid doing work when tab is hidden
+      if (document.visibilityState !== "visible") return;
+      try {
+        const list = await fetchMessages(selectedConversationId);
+        setMessages((prev) => mergeMessages(prev, list));
+      } catch {
+        // ignore
+      }
+    }, 12000);
+
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConversationId]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      loadConversationsRef.current({ silent: true });
+    }, 30000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      loadConversationsRef.current({ silent: true });
+      const selectedId = selectedConversationIdRef.current;
+      if (selectedId) {
+        // lightweight refresh of messages when user returns
+        fetchMessages(selectedId)
+          .then((list) => {
+            setMessages((prev) => mergeMessages(prev, list));
+          })
+          .catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // realtime (subscribe once; use refs to avoid stale closures)
   useEffect(() => {
     const channel = supabase
@@ -353,6 +411,12 @@ export function useWhatsappController() {
         (payload) => {
           const newMsg = payload.new as Message;
           const selectedId = selectedConversationIdRef.current;
+
+          // Beep for new inbound messages (any conversation)
+          if (newMsg.direction === "inbound") {
+            // Best-effort: browsers may block until the user interacts
+            playNotificationBeep();
+          }
 
           // 1) Update message list instantly (selected conversation only)
           setMessages((prev) => {
