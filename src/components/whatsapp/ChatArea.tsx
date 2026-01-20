@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import {
   Send,
   Paperclip,
@@ -13,7 +13,6 @@ import {
   Image,
   FileText,
   Clock,
-  Power,
   UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,10 +33,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ensureAudioEnabled } from "@/lib/notificationSound";
 
 type Message = {
   id: string;
@@ -81,14 +80,98 @@ export default function ChatArea({
 }: ChatAreaProps) {
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRootRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [unreadWhileUp, setUnreadWhileUp] = useState(0);
+  const firstUnreadIdRef = useRef<string | null>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // Enable audio on first user gesture (browser requirement)
+  useEffect(() => {
+    const onFirstGesture = () => {
+      ensureAudioEnabled();
+    };
+    window.addEventListener("pointerdown", onFirstGesture, { once: true });
+    return () => window.removeEventListener("pointerdown", onFirstGesture);
+  }, []);
 
   useEffect(() => {
-    scrollToBottom();
+    // Grab the Radix viewport element once + attach scroll listener
+    if (!scrollAreaRootRef.current) return;
+    const vp = scrollAreaRootRef.current.querySelector(
+      "div[data-radix-scroll-area-viewport]"
+    ) as HTMLDivElement | null;
+    viewportRef.current = vp;
+    if (!vp) return;
+
+    const onScroll = () => handleScroll();
+    vp.addEventListener("scroll", onScroll, { passive: true });
+    // compute initial state
+    handleScroll();
+    return () => vp.removeEventListener("scroll", onScroll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  const handleScroll = () => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const threshold = 80;
+    const distanceFromBottom = vp.scrollHeight - vp.scrollTop - vp.clientHeight;
+    const atBottom = distanceFromBottom <= threshold;
+    setIsAtBottom(atBottom);
+    if (atBottom) {
+      setUnreadWhileUp(0);
+      firstUnreadIdRef.current = null;
+    }
+  };
+
+  // WhatsApp Web behavior: auto-scroll only if user is already at bottom
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    const lastId = last?.id ?? null;
+
+    // Initial load or conversation switch
+    if (!lastMessageIdRef.current) {
+      lastMessageIdRef.current = lastId;
+      requestAnimationFrame(() => scrollToBottom("auto"));
+      return;
+    }
+
+    // No new messages
+    if (lastId && lastId === lastMessageIdRef.current) return;
+    lastMessageIdRef.current = lastId;
+
+    if (isAtBottom) {
+      requestAnimationFrame(() => scrollToBottom("smooth"));
+      setUnreadWhileUp(0);
+      firstUnreadIdRef.current = null;
+      return;
+    }
+
+    // User is reading history: do not jump, show indicator
+    if (lastId) {
+      setUnreadWhileUp((v) => {
+        const next = v + 1;
+        if (next === 1) firstUnreadIdRef.current = lastId;
+        return next;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
+
+  // Reset scroll/unread when changing contact
+  useEffect(() => {
+    lastMessageIdRef.current = null;
+    firstUnreadIdRef.current = null;
+    setUnreadWhileUp(0);
+    setIsAtBottom(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactPhone]);
 
   const handleSend = () => {
     if (message.trim()) {
@@ -130,18 +213,20 @@ export default function ChatArea({
   };
 
   // Group messages by date
-  const groupedMessages = messages.reduce((acc, msg) => {
-    const date = new Date(msg.created_at);
-    const dateKey = format(date, "yyyy-MM-dd");
-    if (!acc[dateKey]) {
-      acc[dateKey] = [];
-    }
-    acc[dateKey].push(msg);
-    return acc;
-  }, {} as Record<string, Message[]>);
+  const groupedMessages = useMemo(() => {
+    return messages.reduce((acc, msg) => {
+      const date = new Date(msg.created_at);
+      const dateKey = format(date, "yyyy-MM-dd");
+      if (!acc[dateKey]) {
+        acc[dateKey] = [];
+      }
+      acc[dateKey].push(msg);
+      return acc;
+    }, {} as Record<string, Message[]>);
+  }, [messages]);
 
   return (
-    <div className="flex flex-col h-full bg-[hsl(var(--muted)/0.3)]">
+    <div className="relative flex flex-col h-full bg-[hsl(var(--muted)/0.3)]">
       {/* Header do Chat */}
       <div className="bg-card border-b px-4 py-3 flex items-center justify-between">
         <button
@@ -267,7 +352,7 @@ export default function ChatArea({
       </div>
 
       {/* Área de Mensagens */}
-      <ScrollArea className="flex-1 px-4">
+      <ScrollArea ref={scrollAreaRootRef as any} className="flex-1 px-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -307,14 +392,25 @@ export default function ChatArea({
                       idx === 0 ||
                       msgs[idx - 1].direction !== m.direction;
 
+                    const showNewDivider =
+                      firstUnreadIdRef.current && m.id === firstUnreadIdRef.current;
+
                     return (
-                      <div
-                        key={m.id}
-                        className={cn(
-                          "flex",
-                          isOutbound ? "justify-end" : "justify-start"
+                      <div key={m.id}>
+                        {showNewDivider && (
+                          <div className="flex justify-center my-4">
+                            <span className="bg-muted/80 text-muted-foreground text-[10px] px-3 py-1 rounded-full shadow-sm tracking-wide">
+                              NOVAS MENSAGENS
+                            </span>
+                          </div>
                         )}
-                      >
+
+                        <div
+                          className={cn(
+                            "flex",
+                            isOutbound ? "justify-end" : "justify-start"
+                          )}
+                        >
                         <div
                           className={cn(
                             "max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm relative",
@@ -407,6 +503,7 @@ export default function ChatArea({
                             )}
                           </div>
                         </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -417,6 +514,25 @@ export default function ChatArea({
           </div>
         )}
       </ScrollArea>
+
+      {/* New messages indicator (WhatsApp Web-like) */}
+      {unreadWhileUp > 0 && (
+        <div className="absolute bottom-20 right-6">
+          <Button
+            size="sm"
+            variant="secondary"
+            className="rounded-full shadow-md"
+            onClick={() => {
+              scrollToBottom("smooth");
+              setUnreadWhileUp(0);
+              firstUnreadIdRef.current = null;
+            }}
+          >
+            {unreadWhileUp} nova{unreadWhileUp > 1 ? "s" : ""} mensagem
+            {unreadWhileUp > 1 ? "s" : ""}
+          </Button>
+        </div>
+      )}
 
       {/* Input Area */}
       <div className="bg-card border-t p-3">
