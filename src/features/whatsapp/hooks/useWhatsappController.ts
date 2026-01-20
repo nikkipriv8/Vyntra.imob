@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Conversation, Lead, Message } from "@/features/whatsapp/types";
@@ -11,6 +11,9 @@ import {
   setHumanTakeover,
   updateConversationLastMessageAt,
 } from "@/features/whatsapp/services/whatsappApi";
+
+// Module-level debounce timer to avoid adding/removing hooks during Fast Refresh.
+let conversationsRefreshTimer: number | null = null;
 
 export function useWhatsappController() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -27,15 +30,13 @@ export function useWhatsappController() {
     [conversations, selectedConversationId]
   );
 
-  const refreshTimerRef = useRef<number | null>(null);
-
   const scheduleConversationsRefresh = () => {
-    if (refreshTimerRef.current) {
-      window.clearTimeout(refreshTimerRef.current);
+    if (conversationsRefreshTimer) {
+      window.clearTimeout(conversationsRefreshTimer);
     }
 
     // Debounce to avoid heavy N+1 refreshes on every realtime event.
-    refreshTimerRef.current = window.setTimeout(() => {
+    conversationsRefreshTimer = window.setTimeout(() => {
       loadConversations({ silent: true });
     }, 600);
   };
