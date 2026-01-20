@@ -175,6 +175,39 @@ export type Database = {
           },
         ]
       }
+      migration_audit_log: {
+        Row: {
+          action: string
+          admin_user_id: string
+          created_at: string
+          entity: string | null
+          errors: Json
+          id: string
+          record_count: number | null
+          success: boolean
+        }
+        Insert: {
+          action: string
+          admin_user_id: string
+          created_at?: string
+          entity?: string | null
+          errors?: Json
+          id?: string
+          record_count?: number | null
+          success: boolean
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string
+          created_at?: string
+          entity?: string | null
+          errors?: Json
+          id?: string
+          record_count?: number | null
+          success?: boolean
+        }
+        Relationships: []
+      }
       migration_runs: {
         Row: {
           created_at: string
