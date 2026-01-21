@@ -23,6 +23,7 @@ const WhatsAppPage = () => {
     loadLeadInfo,
     sendMessage,
     toggleAutomation,
+    removeContact,
   } = useWhatsappController();
 
   return (
@@ -82,6 +83,7 @@ const WhatsAppPage = () => {
               whatsappId={selectedConversation.whatsapp_id}
               conversationId={selectedConversation.id}
               onClose={() => setShowContactInfo(false)}
+              onRemoveContact={() => removeContact(selectedConversation.id)}
               onLeadUpdated={() => {
                 loadConversations();
                 if (selectedConversation.lead_id) {

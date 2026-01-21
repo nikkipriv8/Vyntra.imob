@@ -12,6 +12,7 @@ import {
   Save,
   Tag,
   MessageSquare,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,17 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type Lead = {
   id: string;
@@ -56,6 +68,7 @@ type ContactInfoPanelProps = {
   conversationId: string;
   onClose: () => void;
   onLeadUpdated: () => void;
+  onRemoveContact: () => Promise<void>;
 };
 
 export default function ContactInfoPanel({
@@ -65,6 +78,7 @@ export default function ContactInfoPanel({
   conversationId,
   onClose,
   onLeadUpdated,
+  onRemoveContact,
 }: ContactInfoPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -160,6 +174,16 @@ export default function ContactInfoPanel({
     }
   };
 
+  const handleRemoveContact = async () => {
+    setIsSaving(true);
+    try {
+      await onRemoveContact();
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const statusColors: Record<string, string> = {
     new: "bg-info/10 text-info border-info/20",
     contacted: "bg-warning/10 text-warning border-warning/20",
@@ -221,6 +245,36 @@ export default function ContactInfoPanel({
                 <User className="h-4 w-4 mr-2" />
                 Cadastrar como Lead
               </Button>
+
+              <Separator />
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full" disabled={isSaving}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Remover contato
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remover contato?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Isso vai excluir a conversa e as mensagens do painel. Esta ação não pode ser
+                      desfeita.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isSaving}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleRemoveContact}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      disabled={isSaving}
+                    >
+                      Remover
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           ) : (
             /* Lead vinculado */
@@ -471,14 +525,45 @@ export default function ContactInfoPanel({
                     </Button>
                   </div>
                 ) : (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    <Edit2 className="h-4 w-4 mr-2" />
-                    Editar Contato
-                  </Button>
+                  <div className="space-y-2">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setIsEditing(true)}
+                      disabled={isSaving}
+                    >
+                      <Edit2 className="h-4 w-4 mr-2" />
+                      Editar Contato
+                    </Button>
+
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" className="w-full" disabled={isSaving}>
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Remover contato
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remover contato?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Isso vai excluir a conversa e as mensagens do painel e também apagar o
+                            lead vinculado. Esta ação não pode ser desfeita.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={isSaving}>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleRemoveContact}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={isSaving}
+                          >
+                            Remover
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 )}
               </div>
             </>
