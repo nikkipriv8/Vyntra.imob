@@ -15,6 +15,7 @@ import {
   Clock,
   UserCheck,
 } from "lucide-react";
+import { AudioMessage } from "@/components/whatsapp/AudioMessage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -464,36 +465,11 @@ function ChatAreaInner({
                                   className="rounded-md max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
                                 />
                               ) : m.media_type === "audio" ? (
-                                <div className="space-y-2">
-                                  <audio
-                                    controls
-                                    className="max-w-full"
-                                    src={m.media_url}
-                                  />
-
-                                  {m.transcription_status === "pending" && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Transcrevendo áudio…
-                                    </p>
-                                  )}
-
-                                  {m.transcription && (
-                                    <div className="rounded-md bg-muted/40 px-3 py-2">
-                                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
-                                        Transcrição
-                                      </p>
-                                      <p className="text-xs whitespace-pre-wrap break-words">
-                                        {m.transcription}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {m.transcription_status === "error" && !m.transcription && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Não foi possível transcrever este áudio.
-                                    </p>
-                                  )}
-                                </div>
+                                <AudioMessage
+                                  src={m.media_url}
+                                  transcription={m.transcription}
+                                  transcriptionStatus={m.transcription_status}
+                                />
                               ) : (
                                 <a
                                   href={m.media_url}
