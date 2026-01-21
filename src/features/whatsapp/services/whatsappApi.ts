@@ -139,3 +139,22 @@ export async function setHumanTakeover(conversationId: string) {
   if (error) throw error;
   return now;
 }
+
+export async function deleteWhatsAppContact(conversationId: string) {
+  const { data, error } = await supabase.functions.invoke("delete-whatsapp-contact", {
+    body: {
+      conversation_id: conversationId,
+      delete_lead: true,
+    },
+  });
+
+  if (error) throw error;
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return data as {
+    ok: boolean;
+    messages_deleted: number;
+    reads_deleted: number;
+    conversations_deleted: number;
+    lead_deleted: number;
+  };
+}

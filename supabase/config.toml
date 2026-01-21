@@ -6,3 +6,6 @@ verify_jwt = false
 [functions.assign-lead-broker]
 verify_jwt = false
 
+[functions.delete-whatsapp-contact]
+verify_jwt = false
+

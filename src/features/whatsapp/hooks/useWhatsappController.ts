@@ -5,6 +5,7 @@ import type { Conversation, Lead, Message } from "@/features/whatsapp/types";
 import { playNotificationBeep } from "@/lib/notificationSound";
 import {
   fetchConversations,
+  deleteWhatsAppContact,
   fetchLead,
   fetchMessages,
   insertOutboundMessage,
@@ -277,6 +278,30 @@ export function useWhatsappController() {
     }
   };
 
+  const removeContact = async (conversationId: string) => {
+    try {
+      await deleteWhatsAppContact(conversationId);
+
+      // Optimistic local cleanup
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+
+      if (selectedConversationIdRef.current === conversationId) {
+        setSelectedConversationId(null);
+        setMessages([]);
+        setSelectedLead(null);
+      }
+
+      setShowContactInfo(false);
+      toast.success("Contato removido!");
+
+      // Sync from server
+      await loadConversationsRef.current({ silent: true });
+    } catch (error: any) {
+      toast.error("Erro ao remover: " + (error.message || "Tente novamente"));
+      throw error;
+    }
+  };
+
   // bootstrap
   useEffect(() => {
     loadConversations();
@@ -533,5 +558,6 @@ export function useWhatsappController() {
     loadLeadInfo,
     sendMessage,
     toggleAutomation,
+    removeContact,
   };
 }
